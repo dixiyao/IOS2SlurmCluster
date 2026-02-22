@@ -119,7 +119,7 @@ struct MessageBubble: View {
             } else {
                 Text(message.text)
                     .padding(10)
-                    .background(message.isUser ? Color.accentColor : Color(.systemGray5))
+                    .background(message.isUser ? Color.accentColor : Color(UIColor.systemGray5))
                     .foregroundColor(message.isUser ? .white : .primary)
                     .cornerRadius(12)
             }

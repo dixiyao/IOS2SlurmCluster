@@ -17,19 +17,19 @@ struct ConnectView: View {
                 Section(header: Text("Client Server")) {
                     TextField("Server URL", text: $serverURL)
                         .keyboardType(.URL)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                 }
 
                 Section(header: Text("SSH Connection")) {
                     TextField("Host", text: $sshHost)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     TextField("Port", text: $sshPort)
                         .keyboardType(.numberPad)
                     TextField("Username", text: $sshUsername)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
                     SecureField("Password", text: $sshPassword)
                 }
 
