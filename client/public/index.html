@@ -88,6 +88,11 @@ function connect() {
     if (msg.type === "connected") {
       document.getElementById("connect-screen").style.display = "none";
       document.getElementById("chat-screen").style.display = "flex";
+      document.getElementById("status-text").textContent = "Connected";
+      document.getElementById("status-text").style.color = "#4ade80";
+      waiting = false;
+      removeTyping();
+      document.getElementById("send-btn").disabled = false;
       addMsg("Connected to remote agent.", "system");
     }
 

@@ -28,15 +28,18 @@ wss.on("connection", (ws) => {
     const msg = JSON.parse(raw.toString());
 
     // Connect: establish SSH tunnel to agent
+    // iOS sends credentials in the connect message; web client uses settings.yml
     if (msg.type === "connect") {
+      const ssh = msg.ssh || settings.ssh;
+      const agent = msg.agent || settings.agent;
+
       sshClient = new Client();
 
       sshClient.on("ready", () => {
         console.log("[+] SSH connected");
 
-        // Forward local connection to agent socket on remote server
-        const remoteHost = settings.agent.socket_host;
-        const remotePort = settings.agent.socket_port;
+        const remoteHost = agent.socket_host || "127.0.0.1";
+        const remotePort = agent.socket_port || 8888;
 
         sshClient.forwardOut("127.0.0.1", 0, remoteHost, remotePort, (err, stream) => {
           if (err) {
@@ -80,10 +83,10 @@ wss.on("connection", (ws) => {
       });
 
       sshClient.connect({
-        host: settings.ssh.host,
-        port: settings.ssh.port,
-        username: settings.ssh.username,
-        password: settings.ssh.password,
+        host: ssh.host,
+        port: ssh.port || 22,
+        username: ssh.username,
+        password: ssh.password,
       });
     }
 

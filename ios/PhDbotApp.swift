@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SlurmAgentApp: App {
+struct PhDbotApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
