@@ -1,2 +1,2 @@
-anthropic
+google-genai
 pyyaml

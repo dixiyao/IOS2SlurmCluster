@@ -2,10 +2,10 @@ import socket
 import json
 import subprocess
 import threading
-import queue
 import os
 import yaml
-import anthropic
+from google import genai
+from google.genai import types
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -24,14 +24,15 @@ HOST = settings["agent"]["socket_host"]
 PORT = settings["agent"]["socket_port"]
 SYSTEM_PROMPT = prompts["default"]
 
-client = anthropic.Anthropic(api_key=API_KEY)
+# Google GenAI client
+client = genai.Client(api_key=API_KEY)
 
-# Tool definitions for Claude
-TOOLS = [
+# Tool declarations
+TOOL_DECLARATIONS = types.Tool(function_declarations=[
     {
         "name": "run_command",
         "description": "Execute a shell command on the server and return stdout, stderr, and exit code.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "command": {
@@ -45,7 +46,7 @@ TOOLS = [
     {
         "name": "create_file",
         "description": "Create or overwrite a file at the given path with the given content.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "path": {
@@ -63,7 +64,7 @@ TOOLS = [
     {
         "name": "read_file",
         "description": "Read and return the contents of a file.",
-        "input_schema": {
+        "parameters": {
             "type": "object",
             "properties": {
                 "path": {
@@ -74,7 +75,12 @@ TOOLS = [
             "required": ["path"]
         }
     }
-]
+])
+
+CONFIG = types.GenerateContentConfig(
+    tools=[TOOL_DECLARATIONS],
+    system_instruction=SYSTEM_PROMPT,
+)
 
 
 def execute_tool(name, args):
@@ -117,45 +123,48 @@ def execute_tool(name, args):
     return f"[error: unknown tool {name}]"
 
 
-def process_message(conversation):
-    """Run the agentic loop: call Claude, execute tools, repeat until text response."""
+def process_message(contents):
+    """Run the agentic loop: call Gemini, execute tools, repeat until text response."""
     while True:
-        response = client.messages.create(
+        response = client.models.generate_content(
             model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=conversation,
+            contents=contents,
+            config=CONFIG,
         )
 
-        # Collect assistant content blocks
-        assistant_content = response.content
-        conversation.append({"role": "assistant", "content": assistant_content})
+        # Append assistant response to conversation
+        contents.append(response.candidates[0].content)
 
-        # Check if we need to execute tool calls
-        tool_uses = [b for b in assistant_content if b.type == "tool_use"]
-        if not tool_uses:
-            # No tool calls — extract text and return
-            text_parts = [b.text for b in assistant_content if b.type == "text"]
-            return "\n".join(text_parts)
+        # Check for function calls in response parts
+        function_calls = [
+            part.function_call
+            for part in response.candidates[0].content.parts
+            if part.function_call
+        ]
 
-        # Execute each tool call and build tool results
-        tool_results = []
-        for tool_use in tool_uses:
-            result = execute_tool(tool_use.name, tool_use.input)
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_use.id,
-                "content": result,
-            })
+        if not function_calls:
+            # No tool calls — return text
+            return response.text or ""
 
-        conversation.append({"role": "user", "content": tool_results})
+        # Execute each function call and build response parts
+        function_response_parts = []
+        for fc in function_calls:
+            result = execute_tool(fc.name, dict(fc.args))
+            function_response_parts.append(
+                types.Part.from_function_response(
+                    name=fc.name,
+                    response={"result": result},
+                )
+            )
+
+        # Append tool results as user turn
+        contents.append(types.Content(role="user", parts=function_response_parts))
 
 
 def handle_client(conn, addr):
     """Handle a single client connection."""
     print(f"[+] Client connected: {addr}")
-    conversation = []
+    contents = []
     buffer = ""
 
     try:
@@ -185,12 +194,14 @@ def handle_client(conn, addr):
 
                 print(f"[>] {addr}: {user_text[:80]}")
 
-                # Add user message to conversation
-                conversation.append({"role": "user", "content": user_text})
+                # Add user message
+                contents.append(
+                    types.Content(role="user", parts=[types.Part(text=user_text)])
+                )
 
-                # Process with Claude agent loop
+                # Process with Gemini agent loop
                 try:
-                    reply = process_message(conversation)
+                    reply = process_message(contents)
                 except Exception as e:
                     reply = f"Agent error: {e}"
 

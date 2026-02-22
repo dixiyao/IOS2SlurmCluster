@@ -4,9 +4,9 @@
 # ============================================
 
 api:
-  provider: "claude"
-  api_key: "YOUR_CLAUDE_API_KEY_HERE"
-  model: "claude-sonnet-4-5-20250929"
+  provider: "gemini"
+  api_key: "YOUR_GEMINI_API_KEY_HERE"
+  model: "gemini-3.1-pro"
 
 ssh:
   host: "YOUR_SSH_HOST"
