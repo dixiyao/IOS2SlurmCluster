@@ -1,0 +1,19 @@
+# ============================================
+# IOS2SlurmCluster Settings
+# Customize these values before deploying
+# ============================================
+
+api:
+  provider: "claude"
+  api_key: "YOUR_CLAUDE_API_KEY_HERE"
+  model: "claude-sonnet-4-5-20250929"
+
+ssh:
+  host: "YOUR_SSH_HOST"
+  port: 22
+  username: "YOUR_USERNAME"
+  password: "YOUR_PASSWORD"
+
+agent:
+  socket_host: "127.0.0.1"
+  socket_port: 8888
