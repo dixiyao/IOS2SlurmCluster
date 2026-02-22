@@ -14,7 +14,7 @@ fi
 
 # Start agent as daemon
 echo "Starting agent daemon..."
-nohup python3 agent.py > agent.log 2>&1 &
+nohup python3 -u agent.py > agent.log 2>&1 &
 AGENT_PID=$!
 echo $AGENT_PID > agent.pid
 echo "Agent started with PID $AGENT_PID"
