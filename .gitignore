@@ -56,3 +56,5 @@ logs/
 credentials.json
 secrets.yaml
 config.yaml
+/client/node_modules
+client/package-lock.json
