@@ -9,7 +9,8 @@
   <a href="#setup"><img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" alt="Python"></a>
   <a href="#client"><img src="https://img.shields.io/badge/node.js-18+-green?logo=node.js&logoColor=white" alt="Node.js"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow" alt="License"></a>
-  <a href="#setup"><img src="https://img.shields.io/badge/LLM-Gemini_3.1_Pro-red?logo=google&logoColor=white" alt="Gemini"></a>
+  <a href="#setup"><img src="https://img.shields.io/badge/LLM-Gemini-red?logo=google&logoColor=white" alt="Gemini"></a>
+  <a href="#apple-watch-optional"><img src="https://img.shields.io/badge/watchOS-supported-black?logo=apple&logoColor=white" alt="watchOS"></a>
 </p>
 
 ---
@@ -19,17 +20,19 @@ PhDbot is a lightweight research assistant designed to connect with any cluster 
 The idea is simple: research doesn't stop when you leave the lab. With PhDbot, you can launch jobs, check experiment results, edit configs, and push code from anywhere — as long as you have an internet connection (and the cluster doesn't go down, lol).
 
 ```
-iOS / watchOS / Web Client
-            │
-            ▼
+Apple Watch ←WatchConnectivity→ iPhone
+                                  │
+Web Client  ────────────────────  │
+            │                     │
+            ▼                     ▼
       Client (Node.js)  ── SSH tunnel (port 22) ──▶  Agent (Python)
                                                           │
-                                                          ├── Agent API
+                                                          ├── Agent API  
                                                           ├── Shell commands
                                                           └── File operations
 ```
 
-> **How it works:** The agent runs on your server and listens on a local socket. The client creates an SSH tunnel through port 22 — the only port you need open — and bridges your browser to the agent via WebSocket.
+> **How it works:** The agent runs on your server and listens on a local socket. The client creates an SSH tunnel through port 22 — the only port you need open — and bridges your browser/phone to the agent. The Apple Watch communicates with the iPhone app via WatchConnectivity, which then forwards commands to the cluster.
 
 ---
 
@@ -97,4 +100,3 @@ In the app, enter:
 - **API Key**: Your Gemini API key
 - **Server Host**: Your cluster hostname (e.g., `fe02.ds.uchicago.edu`)
 - **Username** / **Password**: Your SSH credentials
-
