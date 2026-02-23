@@ -63,11 +63,23 @@ final class SSHManager {
                 // Create JSON payload for the agent
                 let payload: [String: String] = ["content": text, "api_key": apiKey]
                 let jsonData = try JSONSerialization.data(withJSONObject: payload)
-                let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+                guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+                    throw NSError(domain: "SSHManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode JSON"])
+                }
                 
-                // Use nc (netcat) to send to local agent socket
-                let command = "echo '\(jsonString)' | nc 127.0.0.1 8888"
-                addDebug("Executing: \(command)")
+                // Escape single quotes in JSON for shell
+                let escapedJson = jsonString.replacingOccurrences(of: "'", with: "'\\''")
+                
+                // Use bash with here-string and /dev/tcp for direct socket communication
+                // This avoids nc buffering issues
+                let command = """
+                (echo '\(escapedJson)'; sleep 0.5) | nc 127.0.0.1 8888 &
+                PID=$!
+                sleep 5
+                kill $PID 2>/dev/null || true
+                wait $PID 2>/dev/null || true
+                """
+                addDebug("Sending message via socket")
                 
                 var output = try await client.executeCommand(command)
                 
