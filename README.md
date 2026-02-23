@@ -101,8 +101,8 @@ In the app, enter:
 - **Server Host**: Your cluster hostname (e.g., `fe02.ds.uchicago.edu`)
 - **Username** / **Password**: Your SSH credentials
 <p align="center">
-  <img src="figures/ios1.png" width="600" alt="Client Chat Example">
+  <img src="figures/ios1.PNG" width="600" alt="Client Chat Example">
 </p>
 <p align="center">
-  <img src="figures/ios2.png" width="600" alt="Client Chat Example">
+  <img src="figures/ios2.PNG" width="600" alt="Client Chat Example">
 </p>
