@@ -80,3 +80,21 @@ Open <http://localhost:3000>, click **Connect**, and start chatting.
 <p align="center">
   <img src="figures/client_example.png" width="600" alt="Client Chat Example">
 </p>
+
+---
+
+### 4. iOS
+
+- Open `ios/PhDBot.xcodeproj` in Xcode
+- Add Citadel SSH library:
+   - File → Add Packages
+   - Enter: `https://github.com/Joannis/Citadel.git`
+   - Click "Add Package"
+- Select your iPhone as run destination
+- Press Run to build and deploy
+
+In the app, enter:
+- **API Key**: Your Gemini API key
+- **Server Host**: Your cluster hostname (e.g., `fe02.ds.uchicago.edu`)
+- **Username** / **Password**: Your SSH credentials
+

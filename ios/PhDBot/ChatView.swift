@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChatView: View {
-    var wsManager: WebSocketManager
+    var sshManager: SSHManager
     @State private var speechManager = SpeechManager()
     @State private var inputText = ""
     var onDisconnect: () -> Void
@@ -12,9 +12,9 @@ struct ChatView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("PhDbot")
                         .font(.headline)
-                    Text(wsManager.isConnected ? "Connected" : "Disconnected")
+                    Text(sshManager.isConnected ? "Connected" : "Disconnected")
                         .font(.caption)
-                        .foregroundColor(wsManager.isConnected ? .green : .red)
+                        .foregroundColor(sshManager.isConnected ? .green : .red)
                 }
                 Spacer()
                 Button("Disconnect") { onDisconnect() }
@@ -29,10 +29,10 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(wsManager.messages) { msg in
+                        ForEach(sshManager.messages) { msg in
                             MessageBubble(message: msg).id(msg.id)
                         }
-                        if wsManager.isWaiting {
+                        if sshManager.isWaiting {
                             HStack {
                                 Text("Agent is thinking...")
                                     .font(.caption)
@@ -44,8 +44,8 @@ struct ChatView: View {
                     }
                     .padding()
                 }
-                .onChange(of: wsManager.messages.count) { _, _ in
-                    if let last = wsManager.messages.last {
+                .onChange(of: sshManager.messages.count) { _, _ in
+                    if let last = sshManager.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
@@ -83,13 +83,13 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !wsManager.isWaiting
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sshManager.isWaiting
     }
 
     private func send() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        wsManager.sendMessage(text)
+        sshManager.sendMessage(text)
         inputText = ""
         speechManager.transcript = ""
     }

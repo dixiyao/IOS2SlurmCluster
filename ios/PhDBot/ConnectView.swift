@@ -1,12 +1,11 @@
 import SwiftUI
 
 struct ConnectView: View {
-    @Binding var serverURL: String
+    @Binding var apiKey: String
     @Binding var sshHost: String
-    @Binding var sshPort: String
     @Binding var sshUsername: String
     @Binding var sshPassword: String
-    var wsManager: WebSocketManager
+    var sshManager: SSHManager
     var onConnected: () -> Void
 
     @State private var isConnecting = false
@@ -14,30 +13,42 @@ struct ConnectView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Client Server")) {
-                    TextField("Server URL", text: $serverURL)
-                        .keyboardType(.URL)
+                Section(header: Text("API Key")) {
+                    SecureField("Gemini API Key", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
 
-                Section(header: Text("SSH Connection")) {
-                    TextField("Host", text: $sshHost)
+                Section(header: Text("SSH Server (Port 22)")) {
+                    TextField("Server Host", text: $sshHost)
+                        .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Port", text: $sshPort)
-                        .keyboardType(.numberPad)
                     TextField("Username", text: $sshUsername)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     SecureField("Password", text: $sshPassword)
+                    Text("Direct SSH to your cluster (e.g., fe02.ds.uchicago.edu)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
-                if let error = wsManager.connectionError {
+                if let error = sshManager.connectionError {
                     Section {
                         Text(error)
                             .foregroundColor(.red)
                             .font(.caption)
+                    }
+                }
+
+                if !sshManager.debugLogs.isEmpty {
+                    Section(header: Text("Debug")) {
+                        ForEach(Array(sshManager.debugLogs.suffix(8).enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                        }
                     }
                 }
 
@@ -56,17 +67,17 @@ struct ConnectView: View {
                             Spacer()
                         }
                     }
-                    .disabled(isConnecting || serverURL.isEmpty || sshHost.isEmpty || sshUsername.isEmpty)
+                    .disabled(isConnecting || apiKey.isEmpty || sshHost.isEmpty || sshUsername.isEmpty)
                 }
             }
             .navigationTitle("PhDbot")
-            .onChange(of: wsManager.isConnected) { _, connected in
+            .onChange(of: sshManager.isConnected) { _, connected in
                 if connected {
                     isConnecting = false
                     onConnected()
                 }
             }
-            .onChange(of: wsManager.connectionError) { _, error in
+            .onChange(of: sshManager.connectionError) { _, error in
                 if error != nil {
                     isConnecting = false
                 }
@@ -76,12 +87,37 @@ struct ConnectView: View {
 
     private func connect() {
         isConnecting = true
-        let ssh: [String: Any] = [
-            "host": sshHost,
-            "port": Int(sshPort) ?? 22,
-            "username": sshUsername,
-            "password": sshPassword
-        ]
-        wsManager.connect(serverURL: serverURL, ssh: ssh)
+        let normalizedHost = normalizeHost(sshHost)
+        sshManager.connect(
+            host: normalizedHost,
+            port: 22,
+            username: sshUsername,
+            password: sshPassword,
+            apiKey: apiKey
+        )
+    }
+
+    private func normalizeHost(_ input: String) -> String {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        if let url = URL(string: trimmed), let host = url.host, !host.isEmpty {
+            return host
+        }
+
+        let withoutScheme = trimmed
+            .replacingOccurrences(of: "ssh://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+            .replacingOccurrences(of: "https://", with: "")
+
+        if let firstPart = withoutScheme.split(separator: "/").first {
+            let hostPort = String(firstPart)
+            if let colonIndex = hostPort.firstIndex(of: ":") {
+                return String(hostPort[..<colonIndex])
+            }
+            return hostPort
+        }
+
+        return trimmed
     }
 }
