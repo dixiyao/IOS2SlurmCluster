@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import Citadel
 import NIO
+import NIOSSH
 
 @MainActor @Observable
 final class SSHManager {
@@ -11,11 +12,9 @@ final class SSHManager {
     var connectionError: String?
     var debugLogs: [String] = []
     
-    private var agentBuffer = ""
     private var apiKey: String = ""
     
     private var sshClient: SSHClient?
-    private var tunnelChannel: Channel?
     
     func connect(host: String, port: Int, username: String, password: String, apiKey: String) {
         self.apiKey = apiKey
@@ -31,34 +30,20 @@ final class SSHManager {
                 let settings = SSHClientSettings(
                     host: host,
                     port: port,
-                    authenticationMethod: .passwordBased(username: username, password: password),
+                    authenticationMethod: { .passwordBased(username: username, password: password) },
                     hostKeyValidator: .acceptAnything()
                 )
                 
                 // Connect to SSH server
                 let client = try await SSHClient.connect(to: settings)
                 sshClient = client
-                addDebug("SSH connected, creating tunnel...")
+                addDebug("SSH connected successfully")
                 
-                // Create tunnel to agent socket (127.0.0.1:8888 on remote server)
-                let address = try SocketAddress(ipAddress: "127.0.0.1", port: 8888)
-                let channel = try await client.createDirectTCPIPChannel(
-                    using: SSHChannelType.DirectTCPIP(
-                        targetHost: "127.0.0.1",
-                        targetPort: 8888,
-                        originatorAddress: address
-                    )
-                ) { channel in
-                    channel
-                }
-                tunnelChannel = channel
-                addDebug("Tunnel established to agent")
-                
+                // Create SSH exec channel to communicate with agent
+                // We'll use the SSH connection to execute commands that talk to local agent
                 isConnected = true
-                messages.append(ChatMessage("Connected to remote agent via SSH.", isSystem: true))
-                
-                // Start reading agent responses
-                readAgentResponses()
+                messages.append(ChatMessage("Connected to SSH server.", isSystem: true))
+                addDebug("Connection fully established")
                 
             } catch {
                 connectionError = "SSH connection failed: \(error.localizedDescription)"
@@ -69,21 +54,44 @@ final class SSHManager {
     }
     
     func sendMessage(_ text: String) {
-        guard isConnected, !isWaiting, let channel = tunnelChannel else { return }
+        guard isConnected, !isWaiting, let client = sshClient else { return }
         messages.append(ChatMessage(text, isUser: true))
         isWaiting = true
         
         Task {
             do {
-                // Send JSON message to agent
-                let payload = try JSONSerialization.data(withJSONObject: ["content": text])
-                var message = String(data: payload, encoding: .utf8) ?? ""
-                message += "\n"
+                // Create JSON payload for the agent
+                let payload: [String: String] = ["content": text, "api_key": apiKey]
+                let jsonData = try JSONSerialization.data(withJSONObject: payload)
+                let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
                 
-                var buffer = channel.allocator.buffer(capacity: message.utf8.count)
-                buffer.writeString(message)
-                try await channel.writeAndFlush(buffer)
-                addDebug("Sent message to agent")
+                // Use nc (netcat) to send to local agent socket
+                let command = "echo '\(jsonString)' | nc 127.0.0.1 8888"
+                addDebug("Executing: \(command)")
+                
+                var output = try await client.executeCommand(command)
+                
+                // Parse the response
+                if let responseString = output.readString(length: output.readableBytes),
+                   !responseString.isEmpty {
+                    let lines = responseString.components(separatedBy: "\n")
+                    for line in lines {
+                        guard !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                        
+                        if let data = line.data(using: .utf8),
+                           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let content = json["content"] as? String {
+                            messages.append(ChatMessage(content))
+                        } else {
+                            messages.append(ChatMessage(line))
+                        }
+                    }
+                    addDebug("Received response")
+                } else {
+                    addDebug("No response from agent")
+                }
+                
+                isWaiting = false
                 
             } catch {
                 connectionError = "Send failed: \(error.localizedDescription)"
@@ -95,10 +103,8 @@ final class SSHManager {
     
     func disconnect() {
         Task {
-            try? await tunnelChannel?.close()
             try? await sshClient?.close()
             sshClient = nil
-            tunnelChannel = nil
         }
         isConnected = false
         isWaiting = false
@@ -106,51 +112,7 @@ final class SSHManager {
         addDebug("Disconnected by user")
     }
     
-    private func readAgentResponses() {
-        guard let channel = tunnelChannel else { return }
-        
-        Task {
-            do {
-                // Add a handler to read incoming data from the agent
-                try await channel.pipeline.addHandler(AgentResponseHandler(manager: self))
-                addDebug("Agent response handler attached")
-            } catch {
-                addDebug("Failed to attach response handler: \(error)")
-            }
-        }
-    }
-    
-    nonisolated func handleAgentData(_ data: String) {
-        Task { @MainActor in
-            agentBuffer += data
-            processAgentBuffer()
-        }
-    }
-    
-    private func processAgentBuffer() {
-        while agentBuffer.contains("\n") {
-            guard let idx = agentBuffer.firstIndex(of: "\n") else { break }
-            let line = String(agentBuffer[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines)
-            agentBuffer.removeSubrange(...idx)
-            
-            guard !line.isEmpty else { continue }
-            
-            do {
-                if let data = line.data(using: .utf8),
-                   let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let content = json["content"] as? String {
-                    isWaiting = false
-                    messages.append(ChatMessage(content))
-                    addDebug("Received agent response")
-                }
-            } catch {
-                isWaiting = false
-                messages.append(ChatMessage(line))
-            }
-        }
-    }
-    
-    private func addDebug(_ message: String) {
+    fileprivate func addDebug(_ message: String) {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         let timestamp = formatter.string(from: Date())
@@ -159,30 +121,5 @@ final class SSHManager {
         if debugLogs.count > 80 {
             debugLogs.removeFirst(debugLogs.count - 80)
         }
-    }
-}
-
-// NIO Channel Handler to read agent responses
-final class AgentResponseHandler: ChannelInboundHandler {
-    typealias InboundIn = ByteBuffer
-    
-    private weak var manager: SSHManager?
-    
-    init(manager: SSHManager) {
-        self.manager = manager
-    }
-    
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        var buffer = unwrapInboundIn(data)
-        if let string = buffer.readString(length: buffer.readableBytes) {
-            manager?.handleAgentData(string)
-        }
-    }
-    
-    func errorCaught(context: ChannelHandlerContext, error: Error) {
-        Task { @MainActor [weak manager] in
-            manager?.addDebug("Channel error: \(error)")
-        }
-        context.close(promise: nil)
     }
 }
