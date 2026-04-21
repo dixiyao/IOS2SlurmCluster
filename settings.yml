@@ -5,14 +5,14 @@
 
 api:
   provider: "gemini"
-  api_key: "YOUR_GEMINI_API_KEY_HERE"
-  model: "gemini-3.1-pro"
+  api_key: "AIzaSyB0FdVnmEdyxu9Phctqu_-1syMMN3ggHco"
+  model: "gemini-2.5-flash"
 
 ssh:
-  host: "YOUR_SSH_HOST"
+  host: "fe02.ds.uchicago.edu"
   port: 22
-  username: "YOUR_USERNAME"
-  password: "YOUR_PASSWORD"
+  username: "dixi"
+  password: "qz3t518A$123"
 
 agent:
   socket_host: "127.0.0.1"
